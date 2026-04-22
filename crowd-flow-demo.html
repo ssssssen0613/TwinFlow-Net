@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人流動線規劃 AI Agent Demo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #171c26;
+    --surface2: #1e2535;
+    --border: #2a3347;
+    --accent: #4ade9b;
+    --accent2: #60a5fa;
+    --warn: #fb923c;
+    --danger: #f87171;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Noto Sans TC', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+
+  .logo span { color: var(--muted); }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: auto;
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  .status-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr 320px;
+    height: calc(100vh - 49px);
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .field { margin-bottom: 12px; }
+
+  .field label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .field input, .field select, .field textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--accent);
+  }
+
+  .field textarea { resize: none; height: 70px; }
+
+  .field select option { background: var(--surface2); }
+
+  .mode-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .mode-btn {
+    flex: 1;
+    min-width: 60px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #0f1117; font-weight: 500; }
+
+  .legend { margin-top: 8px; }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 5px;
+    cursor: pointer;
+  }
+
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .analyze-btn {
+    margin: 16px;
+    padding: 11px;
+    background: var(--accent);
+    color: #0f1117;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    width: calc(100% - 32px);
+    transition: opacity 0.15s;
+    letter-spacing: 0.03em;
+  }
+
+  .analyze-btn:hover { opacity: 0.85; }
+  .analyze-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* CENTER - CANVAS */
+  .canvas-area {
+    position: relative;
+    overflow: hidden;
+    background: #0a0e16;
+  }
+
+  .canvas-wrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #floorCanvas {
+    cursor: crosshair;
+    display: block;
+  }
+
+  .canvas-hint {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(15,17,23,0.8);
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+  }
+
+  .tool-bar {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+  }
+
+  .tool-btn {
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .tool-btn:hover { color: var(--text); }
+  .tool-btn.active { background: var(--surface2); color: var(--accent); }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .output-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .thinking-dots {
+    display: none;
+    gap: 3px;
+  }
+
+  .thinking-dots.active { display: flex; }
+
+  .thinking-dots span {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s infinite;
+  }
+
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.2; }
+    40% { opacity: 1; }
+  }
+
+  .output-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .output-placeholder {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .placeholder-icon {
+    font-size: 32px;
+    opacity: 0.3;
+  }
+
+  .analysis-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.07em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .card-title::before {
+    content: '';
+    width: 3px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 2px;
+    display: block;
+  }
+
+  .card-body {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin: 2px;
+  }
+
+  .tag-green { background: rgba(74,222,155,0.15); color: var(--accent); border: 1px solid rgba(74,222,155,0.3); }
+  .tag-blue { background: rgba(96,165,250,0.15); color: var(--accent2); border: 1px solid rgba(96,165,250,0.3); }
+  .tag-warn { background: rgba(251,146,60,0.15); color: var(--warn); border: 1px solid rgba(251,146,60,0.3); }
+  .tag-danger { background: rgba(248,113,113,0.15); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .metric-row:last-child { border-bottom: none; }
+  .metric-val { font-family: var(--mono); color: var(--accent); }
+
+  .streaming-text {
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .streaming-text strong { color: var(--accent); font-weight: 500; }
+
+  .route-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .route-item:last-child { border-bottom: none; }
+
+  .route-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: var(--accent);
+    color: #0f1117;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CROWD<span>FLOW</span>.AGENT</div>
+  <div style="font-size:12px;color:var(--muted);margin-left:8px;">文創展會人流動線規劃系統</div>
+  <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+    <div class="status-dot" id="statusDot"></div>
+    <div class="status-label" id="statusLabel">READY</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="section-label">場地參數</div>
+      <div class="field">
+        <label>場館名稱</label>
+        <input type="text" id="venueName" value="松山文創園區 3 號倉庫" />
+      </div>
+      <div class="field">
+        <label>預計入場總人數</label>
+        <input type="number" id="totalPeople" value="800" min="50" max="5000" />
+      </div>
+      <div class="field">
+        <label>尖峰入場時段</label>
+        <select id="peakTime">
+          <option value="開幕前 30 分鐘">開幕前 30 分鐘</option>
+          <option value="開幕後前 1 小時" selected>開幕後前 1 小時</option>
+          <option value="分批次售票">分批次售票</option>
+          <option value="全天平均">全天平均</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>特殊條件</label>
+        <textarea id="specialNotes" placeholder="例如：設有無障礙需求、VIP 通道、行李寄放區...">設有 VIP 提前入場、部分觀眾攜帶大型行李</textarea>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">繪圖工具</div>
+      <div class="mode-row">
+        <button class="mode-btn active" onclick="setTool('entrance')" id="btn-entrance">入口</button>
+        <button class="mode-btn" onclick="setTool('exit')" id="btn-exit">出口</button>
+        <button class="mode-btn" onclick="setTool('gate')" id="btn-gate">閘口</button>
+        <button class="mode-btn" onclick="setTool('block')" id="btn-block">障礙</button>
+        <button class="mode-btn" onclick="setTool('erase')" id="btn-erase">清除</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">圖例</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#4ade9b;"></div>入口 (已標記: <span id="countEntrance">0</span>)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f87171;"></div>出口 (已標記: <span id="countExit">0</span>)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#facc15;"></div>驗票閘口 (已標記: <span id="countGate">0</span>)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7280;"></div>障礙物 / 封閉區</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;border:2px dashed #60a5fa;background:transparent;"></div>AI 建議動線</div>
+      </div>
+    </div>
+
+    <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()">
+      ▶ 開始 AI 分析動線
+    </button>
+  </div>
+
+  <!-- CENTER CANVAS -->
+  <div class="canvas-area">
+    <div class="canvas-wrap">
+      <canvas id="floorCanvas" width="680" height="520"></canvas>
+    </div>
+    <div class="tool-bar">
+      <button class="tool-btn active" id="tb-draw" onclick="setDrawMode('draw')">繪製標記</button>
+      <button class="tool-btn" id="tb-view" onclick="setDrawMode('view')">查看動線</button>
+      <button class="tool-btn" onclick="resetCanvas()">重置平面圖</button>
+    </div>
+    <div class="canvas-hint" id="canvasHint">點擊平面圖標記入口、出口或閘口位置</div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="output-header">
+      AGENT OUTPUT
+      <div class="thinking-dots" id="thinkingDots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+    <div class="output-body" id="outputBody">
+      <div class="output-placeholder" id="placeholder">
+        <div class="placeholder-icon">◈</div>
+        <div>設定場地參數並在平面圖標記<br>入口 / 出口 / 閘口後，<br>點擊「開始 AI 分析」</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('floorCanvas');
+const ctx = canvas.getContext('2d');
+
+let currentTool = 'entrance';
+let drawMode = 'draw';
+let markers = [];
+let routes = [];
+let isAnalyzing = false;
+
+const TOOL_COLORS = {
+  entrance: '#4ade9b',
+  exit: '#f87171',
+  gate: '#facc15',
+  block: '#6b7280'
+};
+
+const TOOL_LABELS = {
+  entrance: '入口',
+  exit: '出口',
+  gate: '閘口',
+  block: '障礙'
+};
+
+function drawFloorPlan() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = '#0d1118';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(42,51,71,0.6)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Outer wall
+  ctx.strokeStyle = '#3a4a5e';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(30, 30, W - 60, H - 60);
+
+  // Room label
+  ctx.fillStyle = 'rgba(42,51,71,0.4)';
+  ctx.fillRect(30, 30, W - 60, H - 60);
+
+  // Internal layout - warehouse exhibition space
+  const rooms = [
+    { x: 80, y: 80, w: 180, h: 140, label: '展區 A\n當代藝術', color: 'rgba(74,222,155,0.06)' },
+    { x: 300, y: 80, w: 160, h: 140, label: '展區 B\n互動裝置', color: 'rgba(96,165,250,0.06)' },
+    { x: 500, y: 80, w: 150, h: 140, label: '展區 C\nVIP 預覽', color: 'rgba(251,146,60,0.06)' },
+    { x: 80, y: 270, w: 250, h: 180, label: '中央廣場\n（聚集緩衝區）', color: 'rgba(255,255,255,0.03)' },
+    { x: 380, y: 270, w: 130, h: 80, label: '寄物區', color: 'rgba(148,163,184,0.05)' },
+    { x: 380, y: 370, w: 130, h: 80, label: '廁所', color: 'rgba(148,163,184,0.05)' },
+    { x: 540, y: 270, w: 110, h: 180, label: '服務台\n/ 商品', color: 'rgba(96,165,250,0.05)' },
+  ];
+
+  rooms.forEach(r => {
+    ctx.fillStyle = r.color;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = 'rgba(100,116,139,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+    ctx.fillStyle = 'rgba(148,163,184,0.5)';
+    ctx.font = '11px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    const lines = r.label.split('\n');
+    lines.forEach((line, i) => {
+      ctx.fillText(line, r.x + r.w / 2, r.y + r.h / 2 - (lines.length - 1) * 8 + i * 16);
+    });
+  });
+
+  // Scale indicator
+  ctx.fillStyle = 'rgba(100,116,139,0.4)';
+  ctx.font = '10px IBM Plex Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('比例尺: 1格 = 2m', 34, H - 14);
+
+  // Draw AI routes
+  if (routes.length > 0) {
+    drawRoutes();
+  }
+
+  // Draw markers
+  markers.forEach(m => drawMarker(m));
+}
+
+function drawRoutes() {
+  routes.forEach(route => {
+    if (!route.path || route.path.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = route.color || '#60a5fa';
+    ctx.lineWidth = route.width || 2.5;
+    ctx.setLineDash(route.dashed ? [8, 5] : []);
+    ctx.globalAlpha = route.alpha || 0.7;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(route.path[0].x, route.path[0].y);
+    route.path.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+
+    // Arrow head at end
+    if (route.path.length >= 2) {
+      const last = route.path[route.path.length - 1];
+      const prev = route.path[route.path.length - 2];
+      const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
+      ctx.globalAlpha = route.alpha || 0.7;
+      ctx.fillStyle = route.color || '#60a5fa';
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.translate(last.x, last.y);
+      ctx.rotate(angle);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-14, -6);
+      ctx.lineTo(-14, 6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+function drawMarker(m) {
+  const color = TOOL_COLORS[m.type];
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(m.x, m.y, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = '#0f1117';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(m.x, m.y, 10, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = '#0f1117';
+  ctx.font = 'bold 9px IBM Plex Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(m.index, m.x, m.y);
+
+  ctx.fillStyle = color;
+  ctx.font = '10px "Noto Sans TC", sans-serif';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(TOOL_LABELS[m.type], m.x, m.y - 16);
+}
+
+canvas.addEventListener('click', (e) => {
+  if (drawMode !== 'draw') return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  if (currentTool === 'erase') {
+    const idx = markers.findIndex(m => Math.hypot(m.x - x, m.y - y) < 18);
+    if (idx >= 0) markers.splice(idx, 1);
+  } else {
+    const typeMarkers = markers.filter(m => m.type === currentTool);
+    markers.push({ x, y, type: currentTool, index: typeMarkers.length + 1 });
+  }
+
+  updateCounts();
+  drawFloorPlan();
+});
+
+function updateCounts() {
+  ['entrance', 'exit', 'gate'].forEach(t => {
+    const id = 'count' + t.charAt(0).toUpperCase() + t.slice(1);
+    document.getElementById(id).textContent = markers.filter(m => m.type === t).length;
+  });
+}
+
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + tool).classList.add('active');
+}
+
+function setDrawMode(mode) {
+  drawMode = mode;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tb-' + mode).classList.add('active');
+}
+
+function resetCanvas() {
+  markers = [];
+  routes = [];
+  updateCounts();
+  drawFloorPlan();
+  document.getElementById('outputBody').innerHTML = `<div class="output-placeholder" id="placeholder"><div class="placeholder-icon">◈</div><div>設定場地參數並在平面圖標記<br>入口 / 出口 / 閘口後，<br>點擊「開始 AI 分析」</div></div>`;
+}
+
+function buildPrompt() {
+  const venueName = document.getElementById('venueName').value;
+  const totalPeople = document.getElementById('totalPeople').value;
+  const peakTime = document.getElementById('peakTime').value;
+  const specialNotes = document.getElementById('specialNotes').value;
+
+  const entrances = markers.filter(m => m.type === 'entrance');
+  const exits = markers.filter(m => m.type === 'exit');
+  const gates = markers.filter(m => m.type === 'gate');
+  const blocks = markers.filter(m => m.type === 'block');
+
+  const fmt = (arr, label) => arr.length === 0
+    ? `（未標記）`
+    : arr.map(m => `${label}${m.index}（位置 x:${Math.round(m.x)}, y:${Math.round(m.y)}）`).join('、');
+
+  return `你是一位專業的人流規劃 AI Agent，擅長為展覽、活動場館制定入場動線與疏散方案。
+
+【場館資訊】
+- 場館名稱：${venueName}
+- 平面圖尺寸：680×520 像素（1格=2公尺的倉庫型展覽空間）
+- 內部格局：展區A（當代藝術，左上角）、展區B（互動裝置，中上）、展區C（VIP預覽，右上）、中央廣場（緩衝聚集區）、寄物區、廁所、服務台/商品區
+
+【活動參數】
+- 預計入場總人數：${totalPeople} 人
+- 尖峰入場時段：${peakTime}
+- 特殊條件：${specialNotes || '無'}
+
+【場地標記（座標系：左上角為原點）】
+- 入口：${fmt(entrances, '入口')}
+- 出口：${fmt(exits, '出口')}
+- 驗票閘口：${fmt(gates, '閘口')}
+- 障礙/封閉區：${fmt(blocks, '障礙')}
+
+【任務】
+請針對以上資訊，提供完整的人流規劃方案，包含：
+
+1. **入場動線規劃**：如何分流引導觀眾從入口有序進入，閘口如何配置
+2. **場內動線建議**：觀眾在場內的建議移動路線，避免對衝與瓶頸
+3. **瓶頸風險點**：指出最可能發生擁塞的位置與原因
+4. **緊急疏散方案**：緊急情況下的疏散優先順序與路線
+5. **具體建議**：工作人員配置、時間分配、標示牌設置建議
+
+請用繁體中文回答，語氣專業但易讀，每個部分以清楚的標題區分。`;
+}
+
+async function runAnalysis() {
+  if (isAnalyzing) return;
+
+  const entrances = markers.filter(m => m.type === 'entrance');
+  if (entrances.length === 0) {
+    alert('請先在平面圖上標記至少一個入口！');
+    return;
+  }
+
+  isAnalyzing = true;
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('analyzeBtn').textContent = '分析中...';
+  document.getElementById('thinkingDots').classList.add('active');
+  document.getElementById('statusLabel').textContent = 'ANALYZING';
+  document.getElementById('statusDot').style.background = '#fb923c';
+  document.getElementById('statusDot').style.boxShadow = '0 0 6px #fb923c';
+
+  // Show streaming container
+  const outputBody = document.getElementById('outputBody');
+  outputBody.innerHTML = `
+    <div class="analysis-card">
+      <div class="card-title">場地摘要</div>
+      <div class="card-body">
+        <div class="metric-row"><span>場館</span><span class="metric-val">${document.getElementById('venueName').value}</span></div>
+        <div class="metric-row"><span>預計人數</span><span class="metric-val">${document.getElementById('totalPeople').value} 人</span></div>
+        <div class="metric-row"><span>入口數</span><span class="metric-val">${markers.filter(m=>m.type==='entrance').length}</span></div>
+        <div class="metric-row"><span>出口數</span><span class="metric-val">${markers.filter(m=>m.type==='exit').length}</span></div>
+        <div class="metric-row"><span>閘口數</span><span class="metric-val">${markers.filter(m=>m.type==='gate').length}</span></div>
+      </div>
+    </div>
+    <div class="analysis-card">
+      <div class="card-title">AI Agent 分析結果</div>
+      <div class="streaming-text" id="streamText">正在分析場地配置...</div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        stream: true,
+        messages: [{ role: 'user', content: buildPrompt() }]
+      })
+    });
+
+    const streamText = document.getElementById('streamText');
+    let fullText = '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+      for (const line of lines) {
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            fullText += parsed.delta.text;
+            streamText.innerHTML = formatAnalysis(fullText);
+            outputBody.scrollTop = outputBody.scrollHeight;
+          }
+        } catch {}
+      }
+    }
+
+    // Generate visual routes after analysis
+    generateVisualRoutes();
+    drawFloorPlan();
+
+    // Add route overlay card
+    outputBody.insertAdjacentHTML('beforeend', `
+      <div class="analysis-card">
+        <div class="card-title">動線疊加圖</div>
+        <div class="card-body" style="font-size:12px;color:var(--muted);">
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+            <div><span style="display:inline-block;width:24px;height:3px;background:#60a5fa;border-radius:2px;vertical-align:middle;margin-right:6px;"></span>主入場動線</div>
+            <div><span style="display:inline-block;width:24px;height:3px;background:#4ade9b;border-radius:2px;vertical-align:middle;margin-right:6px;"></span>場內建議路線</div>
+            <div><span style="display:inline-block;width:24px;height:3px;background:#f87171;border-radius:2px;vertical-align:middle;margin-right:6px;border-top:none;border-bottom:none;border-left:none;border-right:none;"></span>疏散路線</div>
+          </div>
+          <div style="margin-top:8px;">藍色動線已疊加至左側平面圖</div>
+        </div>
+      </div>
+    `);
+
+  } catch (err) {
+    document.getElementById('streamText').textContent = '分析失敗：' + err.message + '\n\n請確認 API 金鑰已設定，或網路連線正常。';
+  }
+
+  isAnalyzing = false;
+  document.getElementById('analyzeBtn').disabled = false;
+  document.getElementById('analyzeBtn').textContent = '▶ 重新分析';
+  document.getElementById('thinkingDots').classList.remove('active');
+  document.getElementById('statusLabel').textContent = 'DONE';
+  document.getElementById('statusDot').style.background = '#4ade9b';
+  document.getElementById('statusDot').style.boxShadow = '0 0 6px #4ade9b';
+}
+
+function formatAnalysis(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^#{1,3} (.+)$/gm, '<strong style="color:var(--accent);font-size:13px;">$1</strong>')
+    .replace(/^(\d+)\. /gm, '<br><strong style="color:var(--accent2);">$1.</strong> ')
+    .replace(/^- /gm, '<br>• ')
+    .replace(/\n/g, '<br>');
+}
+
+function generateVisualRoutes() {
+  routes = [];
+  const entrances = markers.filter(m => m.type === 'entrance');
+  const exits = markers.filter(m => m.type === 'exit');
+  const gates = markers.filter(m => m.type === 'gate');
+
+  // Main entry routes (entrance → gate or center)
+  entrances.forEach(en => {
+    const target = gates.length > 0 ? gates[0] : { x: 340, y: 260 };
+    routes.push({
+      path: [{ x: en.x, y: en.y }, { x: en.x, y: target.y }, { x: target.x, y: target.y }],
+      color: '#60a5fa', width: 2.5, dashed: false, alpha: 0.8
+    });
+  });
+
+  // Flow through venue
+  const centerFlow = [
+    { x: 340, y: 260 }, { x: 200, y: 200 }, { x: 170, y: 150 }, // toward A
+  ];
+  routes.push({ path: centerFlow, color: '#4ade9b', width: 2, dashed: true, alpha: 0.65 });
+
+  const flowB = [
+    { x: 340, y: 260 }, { x: 380, y: 150 }, { x: 420, y: 120 },
+  ];
+  routes.push({ path: flowB, color: '#4ade9b', width: 2, dashed: true, alpha: 0.65 });
+
+  // Exit routes
+  if (exits.length > 0) {
+    exits.forEach(ex => {
+      routes.push({
+        path: [{ x: 340, y: 260 }, { x: ex.x, y: 260 }, { x: ex.x, y: ex.y }],
+        color: '#f87171', width: 1.5, dashed: true, alpha: 0.5
+      });
+    });
+  }
+}
+
+// Init
+drawFloorPlan();
+</script>
+</body>
+</html>
