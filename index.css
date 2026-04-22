@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Playfair Display", serif;
+}
+
+@utility writing-mode-vertical {
+  writing-mode: vertical-rl;
+}
+
+@utility bg-white/2 {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+@utility bg-white/5 {
+  background-color: rgba(255, 255, 255, 0.05);
+}
